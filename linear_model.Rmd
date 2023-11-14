@@ -1,0 +1,128 @@
+---
+title: "linear_model"
+author: "Zilin Huang"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(p8105.datasets)
+library(broom)
+```
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb =
+  nyc_airbnb |>
+  mutate(stars=review_scores_location/2) |>
+  select(price, stars, borough=neighbourhood_group, neighbourhood_group, room_type) |>
+  filter(borough != "Staten Island")
+```
+
+```{r}
+fit=lm(price~stars+borough, data=nyc_airbnb)
+summary(fit)
+
+```
+
+```{r}
+fit |>
+  broom::glance()
+
+fit |>
+  broom::tidy() |>
+  mutate(term=str_replace(term, "^borough", "Borough:")) |>
+  select(term, estimate, p.value) |>
+  knitr::kable(digits=3)
+```
+
+```{r}
+fit=lm(price~stars+borough+room_type, data=nyc_airbnb)
+summary(fit)
+
+fit |>
+  broom::tidy()
+```
+
+```{r}
+nyc_airbnb |>
+  modelr::add_residuals(fit)|>
+  ggplot(aes(x=borough,y=resid))+
+  geom_violin()
+
+nyc_airbnb |>
+  modelr::add_residuals(fit)|>
+  ggplot(aes(x=price,y=resid))+
+  geom_point()
+```
+
+```{r}
+fit |>
+  broom::tidy()
+
+fit_null = lm(price~stars+borough,data=nyc_airbnb)
+fit_alternative = lm(price~stars+borough+room_type,data=nyc_airbnb)
+
+anova(fit_null, fit_alternative) |>
+  broom::tidy()
+```
+
+```{r}
+fit = 
+  nyc_airbnb |>
+  lm(price = stars * borough + room_type * borough, data=_)
+
+fit |>
+   broom::tidy()
+```
+
+```{r}
+airbnb_lm=function(df){
+  fit=
+    lm(price~stars+room_type,data=df)
+}
+
+nyc_airbnb |>
+  nest(df=-borough)|>
+  mutate(
+    models=map(df,airbnb_lm),
+    results=map(models,broom::tidy)
+  ) |>
+  select(borough, results)|>
+  unnest(results) |>
+  select(borough, term, estimate) |>
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |>
+  knitr::kable(digits=2)
+```
+
+```{r}
+baltimore_df = 
+  read_csv("data/homicide-data.csv") |> 
+  filter(city == "Baltimore") |> 
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"),
+    victim_age = as.numeric(victim_age),
+    victim_race = fct_relevel(victim_race, "White")) |> 
+  select(resolved, victim_age, victim_race, victim_sex)
+```
+
+```{r}
+fit_logistics = 
+  baltimore_df |>
+  glm(resolved~victim_age+victim_race+victim_sex,data=_,family=binomial())
+
+fit_logistics |>
+  broom::tidy() |>
+  mutate(OR=exp(estimate)) |>
+  select(term, estimate, OR)
+```
+
+```{r}
+baltimore_df |>
+  count(victim_race)
+```
